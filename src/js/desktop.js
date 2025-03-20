@@ -1,686 +1,359 @@
 jQuery.noConflict();
-(async function ($, Swal10, PLUGIN_ID) {
+(async function ($, Swal10, PLUGIN_ID, kintone) {
   "use strict";
-  let CONFIG = kintone.plugin.app.getConfig(PLUGIN_ID).config;
-  if (!CONFIG) return;
-  CONFIG = JSON.parse(CONFIG);
 
-  function getAdjustedDate(offset) {
-    if (!offset) return "";
-    const date = new Date();
-    date.setDate(date.getDate() + Number(offset));
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    return `${year}-${month}-${day}`;
-  }
-
-  function getJapaneseEra(date) {
-    if (!window.BoK?.Constant?.JpCalenderBase) return false;
-
-    const JP_CALENDAR = window.BoK.Constant.JpCalenderBase.sort(
-      (a, b) => new Date(a[0]) - new Date(b[0])
-    );
-
-    let eraSymbol = "";
-    let eraStartYear = 0;
-    let eraStartDate = null;
-
-    for (let i = JP_CALENDAR.length - 1; i >= 0; i--) {
-      const [startDateStr, , symbol] = JP_CALENDAR[i];
-      const startDate = new Date(startDateStr);
-
-      if (date >= startDate) {
-        eraSymbol = symbol;
-        eraStartYear = date.getFullYear() - startDate.getFullYear() + 1;
-        eraStartDate = startDate;
-        break;
-      }
+  // Configuration handling with error boundary
+  let CONFIG;
+  try {
+    const configData = kintone.plugin.app.getConfig(PLUGIN_ID).config;
+    if (!configData) {
+      console.warn("No configuration found for plugin:", PLUGIN_ID);
+      return;
     }
-
-    if (!eraSymbol) return false;
-
-    const customYear = String(eraStartYear).padStart(2, "0");
-    const eraYear = date.getFullYear();
-    const eraMonth = String(date.getMonth() + 1).padStart(2, "0");
-    const eraDay = String(date.getDate()).padStart(2, "0");
-
-    return {
-      eraSymbol,
-      customYear,
-      formattedDate: `${eraYear}-${eraMonth}-${eraDay}`,
-    };
+    CONFIG = JSON.parse(configData);
+  } catch (error) {
+    console.error("Error parsing plugin configuration:", error);
+    return;
   }
 
-  async function convertJapaneseEraToDate(eraInput) {
-    if (window.BoK) {
-      if (!window.BoK.Constant.JpCalenderBase) {
-        Swal10.fire({
-          position: "center",
-          icon: "error",
-          text: "Apply the Constant Control plugin.”",
-          confirmButtonColor: "#3498db",
-          showCancelButton: false,
-          confirmButtonText: "OK",
-          customClass: {
-            confirmButton: "custom-confirm-button",
-          },
-        });
-        return false;
-      }
-    } else {
-      Swal10.fire({
-        position: "center",
-        icon: "error",
-        text: "Apply the Constant Control plugin.”",
-        confirmButtonColor: "#3498db",
-        showCancelButton: false,
-        confirmButtonText: "OK",
-        customClass: {
-          confirmButton: "custom-confirm-button",
+  function parseDate(input) {
+    if (!input || typeof input !== "string") return null;
+
+    const currentYear = new Date().getFullYear();
+    const formats = [
+      {
+        regex: /^\d{8}$/,
+        parse: (s) => `${s.slice(0, 4)}-${s.slice(4, 6)}-${s.slice(6)}`,
+      },
+      {
+        regex: /^\d{6}$/,
+        parse: (s) => `20${s.slice(0, 2)}-${s.slice(2, 4)}-${s.slice(4)}`,
+      },
+      {
+        regex: /^\d{4}$/,
+        parse: (s) => `${currentYear}-${s.slice(0, 2)}-${s.slice(2, 4)}`,
+      },
+      {
+        regex: /^(\d{4})\s+(\d{1,2})\s+(\d{1,2})$/,
+        parse: (s) => {
+          const [year, month, day] = s.split(/\s+/);
+          return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
         },
-      });
-      return false;
-    }
-    const JP_CALENDAR = window.BoK.Constant.JpCalenderBase.sort(
-      (a, b) => new Date(a[0]) - new Date(b[0])
-    );
-    let eraSymbol, customYear, month, day;
-    if (/^[A-Za-z]\d{2}\.\d{2}\.\d{2}$/.test(eraInput)) {
-      const match = /^([A-Za-z])(\d{2})\.(\d{2})\.(\d{2})$/.exec(eraInput);
-      [, eraSymbol, customYear, month, day] = match;
-    } else if (/^[A-Za-z]\d{2}\d{2}\d{2}$/.test(eraInput)) {
-      const match = /^([A-Za-z])(\d{2})(\d{2})(\d{2})$/.exec(eraInput);
-      [, eraSymbol, customYear, month, day] = match;
-    } else if (/^[A-Za-z] \d{1,2} \d{1,2} \d{1,2}$/.test(eraInput)) {
-      const parts = eraInput.split(" ");
-      [eraSymbol, customYear, month, day] = parts;
-    } else {
-      return false; 
-    }
-    customYear = parseInt(customYear, 10); 
-    month = parseInt(month, 10);
-    day = parseInt(day, 10);
-    if (isNaN(customYear) || isNaN(month) || isNaN(day)) {
-      return false;
-    }
-    const eraData = JP_CALENDAR.find(
-      (entry) => entry[2].toUpperCase() === eraSymbol.toUpperCase()
-    );
-    if (!eraData) {
-      return false;
-    }
-    const eraStartDate = new Date(eraData[0]); 
-    let year = eraStartDate.getFullYear() + customYear - 1;
-    if (month < 1 || month > 12 || day < 1 || day > 31) {
-      return false;
-    }
-    return {
-      year: String(year),
-      month: String(month),
-      day: String(day),
-    };
-  }
+      },
+      {
+        regex: /^(\d{2})\s+(\d{1,2})\s+(\d{1,2})$/,
+        parse: (s) => {
+          const [year, month, day] = s.split(/\s+/);
+          return `${currentYear.toString().slice(0, 2) + year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        },
+      },
+      {
+        regex: /^(\d{1,2})\s+(\d{1,2})$/,
+        parse: (s) => {
+          const [month, day] = s.split(/\s+/);
+          return `${currentYear}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+        },
+      },
+      {
+        regex: /^(\d{2})\/(\d{2})\/(\d{4})$/,
+        parse: (s) =>
+          `${s.split("/")[2]}-${s.split("/")[0].padStart(2, "0")}-${s.split("/")[1].padStart(2, "0")}`,
+      },
+      {
+        regex: /^(\d{2})(\d{2})(\d{4})$/,
+        parse: (s) => `${s.slice(4, 8)}-${s.slice(0, 2)}-${s.slice(2, 4)}`,
+      },
+      {
+        regex: /^(\d{2})\/(\d{2})$/,
+        parse: (s) => `${currentYear}-${s.split("/")[0]}-${s.split("/")[1]}`,
+      },
+      {
+        regex: /^(\d{2})\/(\d{1})$/,
+        parse: (s) =>
+          `${currentYear}-${s.split("/")[0]}-${s.split("/")[1].padStart(2, "0")}`,
+      },
+      {
+        regex: /^R(\d{2})(\d{4})$/,
+        parse: (s) =>
+          `${2018 + parseInt(s.slice(1, 3))}-${s.slice(3, 5)}-${s.slice(5)}`,
+      },
+      {
+        regex: /^(\d{4})(\d{1})(\d{1})$/,
+        parse: (s) =>
+          `${s.slice(0, 4)}-${s.slice(4, 5).padStart(2, "0")}-${s.slice(5).padStart(2, "0")}`,
+      },
+    ];
 
-  async function parseDate(input) {
-    if (!input) return getAdjustedDate(0);
-    try {
-      const currentYear = new Date().getFullYear();
-      let year, month, day;
-      const pad = (num) => String(num).padStart(2, "0");
-      const isValidDate = (y, m, d) => {
-        const date = new Date(y, m - 1, d); 
-        return (
-          date.getFullYear() === y &&
-          date.getMonth() + 1 === m &&
-          date.getDate() === d
-        );
-      };
+    // Add Japanese era format parsing
+    const japaneseDate = parseJapaneseDate(input);
+    if (japaneseDate) return japaneseDate;
 
-      if (/^\d{8}$/.test(input)) {
-        // YYYYMMDD
-        year = parseInt(input.slice(0, 4), 10);
-        month = parseInt(input.slice(4, 6), 10);
-        day = parseInt(input.slice(6, 8), 10);
-      } else if (/^\d{6}$/.test(input)) {
-        // YYMMDD
-        year = parseInt(input.slice(0, 2), 10) + 2000; 
-        month = parseInt(input.slice(2, 4), 10);
-        day = parseInt(input.slice(4, 6), 10);
-      } else if (/^\d{4}$/.test(input)) {
-        // MMDD
-        year = currentYear;
-        month = parseInt(input.slice(0, 2), 10);
-        day = parseInt(input.slice(2, 4), 10);
-      } else if (/^\d{1,2}\/\d{1,2}$/.test(input)) {
-        // MM/DD or MM/D
-        const [m, d] = input.split("/");
-        year = currentYear;
-        month = parseInt(m, 10);
-        day = parseInt(d, 10);
-      } else if (/^\d{4} \d{1,2} \d{1,2}$/.test(input)) {
-        // YYYY M D
-        const [y, m, d] = input.split(" ");
-        year = parseInt(y, 10);
-        month = parseInt(m, 10);
-        day = parseInt(d, 10);
-      } else if (/^\d{2} \d{1,2} \d{1,2}$/.test(input)) {
-        // YY M D
-        const [y, m, d] = input.split(" ");
-        year = parseInt(y, 10) + 2000;
-        month = parseInt(m, 10);
-        day = parseInt(d, 10);
-      } else if (/^\d{1,2} \d{1,2}$/.test(input)) {
-        // M D
-        const [m, d] = input.split(" ");
-        year = currentYear;
-        month = parseInt(m, 10);
-        day = parseInt(d, 10);
-      } else if (/^\d{4}-\d{2}-\d{2}$/.test(input)) {
-        // YYYY-MM-DD
-        const [y, m, d] = input.split("-");
-        year = parseInt(y, 10);
-        month = parseInt(m, 10);
-        day = parseInt(d, 10);
-      } else if (/^\d{4}\/\d{2}\/\d{2}$/.test(input)) {
-        // YYYY/MM/DD
-        const [y, m, d] = input.split("/");
-        year = parseInt(y, 10);
-        month = parseInt(m, 10);
-        day = parseInt(d, 10);
-      } else if (/^\d{4}\.\d{2}\.\d{2}$/.test(input)) {
-        // YYYY.MM.DD
-        const [y, m, d] = input.split(".");
-        year = parseInt(y, 10);
-        month = parseInt(m, 10);
-        day = parseInt(d, 10);
-      } else {
-        //eYYMMDD
-        //e YY MM DD
-        //e Y MM D
-        let revert = await convertJapaneseEraToDate(input);
-        if (!revert) return false;
-        year = parseInt(revert.year, 10);
-        month = parseInt(revert.month, 10);
-        day = parseInt(revert.day, 10);
-      }
-      // Validate the extracted date
-      if (!isValidDate(year, month, day)) {
-        return false; // Invalid date
-      }
-      return `${year}-${pad(month)}-${pad(day)}`;
-    } catch (error) {
-      return false;
-    }
-  }
-
-  function getFieldData(data, fieldCode) {
-    for (const key in data.table.fieldList) {
-      if (data.table.fieldList[key].var === fieldCode) {
-        return data.table.fieldList[key];
-      }
-    }
-    for (const subKey in data.subTable) {
-      for (const key in data.subTable[subKey].fieldList) {
-        if (data.subTable[subKey].fieldList[key].var === fieldCode) {
-          return data.subTable[subKey].fieldList[key];
+    // Check other formats
+    for (let { regex, parse } of formats) {
+      if (regex.test(input)) {
+        const parsed = parse(input);
+        const [year, month, day] = parsed.split("-").map(Number);
+        if (
+          year >= 1900 &&
+          year <= 9999 &&
+          month >= 1 &&
+          month <= 12 &&
+          day >= 1 &&
+          day <= 31
+        ) {
+          return parsed;
         }
       }
     }
     return null;
   }
 
-  async function getFormatDate(dateValue, format) {
-    if (!dateValue) return "";
-    if (format === "-----") return dateValue;
+  function parseJapaneseDate(input) {
+    if (window.BoK) {
+      if (!window.BoK.Constant.JpCalenderBase) return false;
+    } else {
+      return false;
+    }
+    const JP_CALENDAR = window.BoK.Constant.JpCalenderBase.sort(
+      (a, b) => new Date(a[0]) - new Date(b[0])
+    );
 
-    const date = new Date(dateValue);
-    const yearFull = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, "0");
-    const day = String(date.getDate()).padStart(2, "0");
-    const yearShort = String(yearFull).slice(2);
+    // Case-insensitive regex with optional space and optional month/day
+    const regex = /^([tm shr])\s?(\d{1,2})(?:\s+(\d{1,2})(?:\s+(\d{1,2}))?)?$/i;
+    const match = input.trim().match(regex);
 
+    if (!match) return null;
+
+    const [, eraAbbr, yearStr, monthStr = "1", dayStr = "1"] = match;
+    const year = parseInt(yearStr, 10);
+    const month = parseInt(monthStr, 10);
+    const day = parseInt(dayStr, 10);
+
+    if (year < 1 || month < 1 || month > 12 || day < 1 || day > 31) {
+      return null;
+    }
+
+    const eraInfo = JP_CALENDAR.find(
+      ([_, __, abbr]) => abbr.toLowerCase() === eraAbbr.toLowerCase()
+    );
+    if (!eraInfo) return null;
+
+    const [eraStartDate] = eraInfo;
+    const [startYear] = eraStartDate.split("-").map(Number);
+    const gregorianYear = startYear + year - 1;
+
+    const date = new Date(gregorianYear, month - 1, day);
+    if (
+      date.getFullYear() !== gregorianYear ||
+      date.getMonth() !== month - 1 ||
+      date.getDate() !== day
+    ) {
+      return null;
+    }
+
+    return `${gregorianYear}-${month.toString().padStart(2, "0")}-${day.toString().padStart(2, "0")}`;
+  }
+
+  function formatDate(dateString, format) {
+    if (!dateString) return "";
+    const [year, month, day] = dateString.split("-");
     switch (format) {
       case "YYYY-MM-DD":
-        return `${yearFull}-${month}-${day}`;
+        return `${year}-${month}-${day}`;
       case "YYYY/MM/DD":
-        return `${yearFull}/${month}/${day}`;
+        return `${year}/${month}/${day}`;
       case "YYYY.MM.DD":
-        return `${yearFull}.${month}.${day}`;
+        return `${year}.${month}.${day}`;
       case "YY/MM/DD":
-        return `${yearShort}/${month}/${day}`;
+        return `${year.slice(2)}/${month}/${day}`;
       case "YY.MM.DD":
-        return `${yearShort}.${month}.${day}`;
-      case "eYY.MM.DD": {
-        const jp = getJapaneseEra(date);
-        return jp ? `${jp.eraSymbol}${jp.customYear}.${month}.${day}` : false;
-      }
-      case "e_YY_MM_DD": {
-        const jp = getJapaneseEra(date);
-        return jp ? `${jp.eraSymbol} ${jp.customYear} ${month} ${day}` : false;
-      }
+        return `${year.slice(2)}.${month}.${day}`;
+      case "eYY-MM-DD":
+        return `e${year.slice(2)}-${month}-${day}`;
+      case "eYY/MM/DD":
+        return `e${year.slice(2)}/${month}/${day}`;
       default:
-        return "";
+        console.warn(`Unsupported format: ${format}, defaulting to YYYY-MM-DD`);
+        return `${year}-${month}-${day}`;
     }
   }
 
+  // Create and Edit page handler
   kintone.events.on(
-    ["app.record.edit.show", "app.record.create.show"],
-    async (event) => {
-      let record = event.record;
-      let errors = {};
+    ["app.record.create.show", "app.record.edit.show"],
+    function (event) {
+      CONFIG.formatSetting.forEach((item) => {
+        console.log(item);
 
-      for (let item of CONFIG.formatSetting) {
-        if (item.space === "-----") continue;
+        if (item.type !== "DATE" || !item.storeField?.code || !item.space)
+          return;
+
         kintone.app.record.setFieldShown(item.storeField.code, false);
         const spaceElement = kintone.app.record.getSpaceElement(item.space);
-        if (!spaceElement) continue;
-
-        let defaultDate = getAdjustedDate(item.initialValue);
-        if (event.type === "app.record.edit.show") {
-          defaultDate = record[item.storeField.code].value;
+        if (!spaceElement) {
+          console.warn(`Space ${item.space} not found`);
+          return;
         }
-        record[item.storeField.code].value = defaultDate;
-        const defaultInputValue = await getFormatDate(defaultDate, item.format);
 
-        const inputContainer = $("<div>").addClass(
-          "control-gaia control-date-field-gaia"
-        );
-        const label = $("<div>")
-          .addClass("control-label-gaia")
-          .append(
-            $("<label>")
-              .addClass("control-label-text-gaia")
-              .text(item.storeField.label)
-          );
-        const inputGroup = $("<div>").addClass("control-value-gaia");
-        const inputError = $("<div>")
-          .addClass("popup-alert")
-          .append($("<span>").text("Invalid date format."))
-          .hide();
-        const input = $("<div>").append(
-          $("<input>")
-            .attr("type", "text")
-            .addClass("kintoneplugin-input-text date-input")
-            .val(defaultInputValue || defaultDate)
-            .on("change", async (e) => {
-              const changeFormat = await parseDate(e.target.value.trim());
-              if (changeFormat === false) {
-                $(inputError).show();
-                errors[item.storeField.code] = "Invalid date value";
-              } else {
-                delete errors[item.storeField.code];
-                $(inputError).hide();
-                e.target.value = await getFormatDate(changeFormat, item.format);
-                await setRecord(item.storeField.code, changeFormat);
-              }
-            })
-        );
+        const labelField = document.createElement("label");
+        labelField.textContent = item.storeField.label || "Date";
+        labelField.className = "label_date_format";
 
-        inputGroup.append(input, inputError);
-        inputContainer.append(label, inputGroup);
-        $(spaceElement).append(inputContainer);
-      }
+        const inputBoxDate = document.createElement("input");
+        inputBoxDate.className = "kintoneplugin-input-text date-input";
+        inputBoxDate.type = "text";
+        inputBoxDate.placeholder = "";
 
-      async function setRecord(fieldCode, value) {
-        let rec = kintone.app.record.get();
-        rec.record[fieldCode].value = value;
-        kintone.app.record.set(rec);
-      }
-
-      kintone.events.on(
-        ["app.record.edit.submit", "app.record.create.submit"],
-        async (event) => {
-          if (Object.keys(errors).length > 0)
-            event.error = "Invalid value detected";
-          return event;
+        // Set initial or existing value
+        const existingValue = event.record[item.storeField.code]?.value;
+        if (event.type === "app.record.edit.show" && existingValue) {
+          inputBoxDate.value = formatDate(existingValue, item.format);
+        } else if (
+          event.type === "app.record.create.show" &&
+          item.initialValue
+        ) {
+          const initialOffset = parseInt(item.initialValue) || 0;
+          const date = new Date();
+          date.setDate(date.getDate() + initialOffset);
+          const dateString = date.toISOString().split("T")[0];
+          inputBoxDate.value = formatDate(dateString, item.format);
+          event.record[item.storeField.code].value = dateString;
         }
-      );
 
+        const spacePopupAlert = document.createElement("div");
+        spacePopupAlert.className = "popup-alert";
+        spacePopupAlert.textContent = "Invalid date format.";
+        spacePopupAlert.style.display = "none";
+
+        inputBoxDate.addEventListener("change", (e) => {
+          const record = kintone.app.record.get();
+          const input = e.target.value.trim();
+
+          if (input === "") {
+            // Empty input is allowed, hide alert
+            spacePopupAlert.style.display = "none";
+            record.record[item.storeField.code].value = null;
+          } else {
+            const parsedDate = parseDate(input);
+            if (parsedDate) {
+              // Correct date format detected, hide alert and format the date
+              const formattedDate = formatDate(parsedDate, item.format);
+              e.target.value = formattedDate;
+              record.record[item.storeField.code].value = parsedDate;
+              spacePopupAlert.style.display = "none";
+            } else {
+              // Incorrect date format, show alert
+              spacePopupAlert.style.display = "block";
+              record.record[item.storeField.code].value = null;
+            }
+          }
+
+          kintone.app.record.set(record);
+        });
+
+        spaceElement.appendChild(labelField);
+        spaceElement.appendChild(inputBoxDate);
+        spaceElement.appendChild(spacePopupAlert);
+        spaceElement.appendChild(document.createElement("br"));
+      });
       return event;
     }
   );
 
-  kintone.events.on("app.record.detail.show", async (event) => {
+  // Index page handler
+  kintone.events.on("app.record.index.show", function (event) {
+    if (!CONFIG?.formatSetting?.length) return event;
     const schemaPage = cybozu.data.page.SCHEMA_DATA;
-    let record = event.record;
-    let errorMessage;
+  
+    const tableLabel = schemaPage.table.fieldList;
+    console.log("🚀 ~ schemaPage:", tableLabel);
+  
+    tableLabel.forEach((item) => {
+      console.log("🚀 ~ item:", item.label);
+    });
 
-    for (const item of CONFIG.formatSetting) {
-      let field = getFieldData(schemaPage, item.storeField.code);
-      if (item.space !== "-----") {
-        let spaceElement = kintone.app.record.getSpaceElement(item.space);
-        $(spaceElement)?.parent().remove();
+    // Format regular date fields
+    CONFIG.formatSetting.forEach((item) => {
+      if (item.type !== "DATE" || !item.storeField?.code) return;
+  
+      // Handle regular fields
+      const fieldElement = kintone.app.record.getFieldElement(
+        item.storeField.code
+      );
+      
+      console.log("fieldElement", fieldElement);
+      
+      if (fieldElement && event.record[item.storeField.code]?.value) {
+        const formattedDate = formatDate(
+          event.record[item.storeField.code].value,
+          item.format
+        );
+        fieldElement.textContent = formattedDate;
       }
-
-      const dateValue = record[item.storeField.code].value;
-      if (item.format === "-----") continue;
-      const formatDate = await getFormatDate(dateValue, item.format);
-      if (formatDate === false) {
-        errorMessage = "Please apply the Constant Management Plugin";
-      } else {
-        $(`.value-${field.id}`).find("span").text(formatDate);
-      }
-    }
-
-    if (errorMessage) {
-      Swal10.fire({
-        position: "center",
-        icon: "error",
-        text: errorMessage,
-        confirmButtonColor: "#3498db",
-        showCancelButton: false,
-        confirmButtonText: "OK",
-        customClass: { confirmButton: "custom-confirm-button" },
-      });
-    }
+      
+    });
+    
     return event;
   });
 
-  kintone.events.on("app.record.index.show", async (event) => {
-    const schemaPage = cybozu.data.page.SCHEMA_DATA;
-    let errorMessage;
-    for (const item of CONFIG.formatSetting) {
-      let data = getFieldData(schemaPage, item.storeField.code);
-      let fields = $(`.value-${data.id}`);
+  // Detail page handler
+  kintone.events.on("app.record.detail.show", function (event) {
+    if (!CONFIG?.formatSetting?.length) return event;
 
-      for (const field of fields) {
-        const dateValue = $(field).find("span").text();
-        if (item.format === "-----") continue;
-        const formatDate = await getFormatDate(dateValue, item.format);
-        if (formatDate === false) {
-          errorMessage = "Please apply the Constant Management Plugin";
-        } else {
-          $(field).find("span").text(formatDate);
-        }
-      }
-    }
-    if (errorMessage)
-      return Swal10.fire({
-        position: "center",
-        icon: "error",
-        text: errorMessage,
-        confirmButtonColor: "#3498db",
-        showCancelButton: false,
-        confirmButtonText: "OK",
-        customClass: {
-          confirmButton: "custom-confirm-button",
-        },
-      });
+    CONFIG.formatSetting.forEach((item) => {
+      if (item.type !== "DATE" || !item.storeField?.code) return;
 
-    //__________________________________________________________________
-    const spaceEl = kintone.app.getHeaderMenuSpaceElement();
-    if ($(spaceEl).find(".custom-space-el").length > 0) {
-      return;
-    }
-    const elementsAll = $("<div></div>").addClass("custom-space-el");
-    let btnSearch = $("<button></button>")
-      .addClass("kintoneplugin-button-dialog-ok search")
-      .text("Search");
-    let btnCancel = $("<button></button>")
-      .addClass("kintoneplugin-button-dialog-ok cancel")
-      .text("Cancel");
-    let getFieldResponse = await kintone.api(
-      "/k/v1/preview/app/form/fields",
-      "GET",
-      {
-        app: kintone.app.getId(),
-      }
-    );
-
-    const urlObj = new URL(window.location.href);
-    const bokTerm = urlObj.searchParams.get("bokTerms");
-    let bokTermObj = JSON.parse(bokTerm);
-    if (bokTermObj == null) {
-      createInputBox(getFieldResponse, CONFIG.searchContent, "initial");
-    } else {
-      createInputBox(getFieldResponse, bokTermObj);
-    }
-
-    function createInputBox(getFieldResponse, createInputDate, status) {
-      createInputDate.forEach((item) => {
-        let elements = $("<div></div>").addClass("custom-input-date");
-        let elementsLabelDate = $("<div></div>").addClass("label-and-date");
-        let labelEl = $("<label></label>");
-        let field = item.fieldSearch.code;
-        if (getFieldResponse.properties[field]) {
-          let currentInputType;
-          let setClass = item.searchName.replace(/\s+/g, "_");
-          const inputError = $("<div>")
-            .addClass("input-error search")
-            .append($("<span></span>").text("Incorrect value."))
-            .hide();
-
-          labelEl
-            .text(item.searchName)
-            .addClass(`label-${setClass}`)
-            .on("click", function (event) {
-              $(".popup").remove();
-              const popup = document.createElement("div");
-              popup.className = "popup";
-              popup.innerHTML = `
-            <button class="exact">Exact</button>
-            <button class="range">Range</button>
-          `;
-              elements.append(popup);
-              event.stopPropagation();
-
-              document.addEventListener("click", function closePopup(e) {
-                if (!popup.contains(e.target)) {
-                  popup.remove();
-                  document.removeEventListener("click", closePopup);
-                }
-              });
-
-              // Exact
-              popup
-                .querySelector(".exact")
-                .addEventListener("click", function (event) {
-                  event.stopPropagation();
-                  if (currentInputType !== "exact") {
-                    elementsLabelDate.children(":not(label)").remove();
-                    const dateInput = createDateInput(item.searchName);
-                    $(dateInput)
-                      .find("input")
-                      .on("change", async function (e) {
-                        let changeFormat = await parseDate(
-                          e.target.value.trim()
-                        );
-                        if (changeFormat === false) {
-                          inputError.show();
-                        } else {
-                          inputError.hide();
-                        }
-                      });
-                    elementsLabelDate.append(dateInput, inputError);
-                    currentInputType = "exact";
-                  }
-                  popup.remove();
-                });
-
-              // Range
-              popup
-                .querySelector(".range")
-                .addEventListener("click", function (event) {
-                  event.stopPropagation();
-                  if (currentInputType !== "range") {
-                    elementsLabelDate.children(":not(label)").remove();
-                    const dateRange = createDateRangeInput(item.searchName);
-                    dateRange.querySelectorAll("input").forEach((input) => {
-                      input.addEventListener("change", async function (e) {
-                        let changeFormat = await parseDate(
-                          e.target.value.trim()
-                        );
-                        if (changeFormat === false) {
-                          inputError.show();
-                        } else {
-                          inputError.hide();
-                        }
-                      });
-                    });
-                    elementsLabelDate.append(dateRange, inputError);
-                    currentInputType = "range";
-                  }
-                  popup.remove();
-                });
-            });
-
-        elementsLabelDate.append(labelEl);
-        let dateInput
-        if (status === "initial") {
-          let value = "";
-          dateInput = $(createDateInput(item.searchName, value));
-          currentInputType = 'exact'
-        }else{
-          if(item.type == "exact") {
-            dateInput = $(createDateInput(item.searchName, item.value));
-            currentInputType = 'exact'
-          }else{
-            dateInput = $(createDateRangeInput(item.searchName, item.startDate, item.endDate));
-            currentInputType = 'range'
-          }
-        }
-        dateInput.find('input').on('change', async function (e) {
-          let changeFormat = await parseDate(e.target.value.trim());
-          console.log(changeFormat)
-
-          
-          if (changeFormat === false) {
-            inputError.show();
-          } else {
-            inputError.hide();
-          }
-        });
-        elementsLabelDate.append(dateInput, inputError);
-        elements.append(elementsLabelDate);
-      }
-      elementsAll.append(elements);
-    });
-    elementsAll.append(btnSearch, btnCancel);
-    $(spaceEl).append(elementsAll);
-  }
-
-    btnSearch.on("click", async function () {
-      let searchInfoList = [];
-      let query = ''; 
-      let hasError = elementsAll.find('.input-error.search').filter(function() {
-      return $(this).css('display') !== 'none';
-      }).length > 0;
+      const fieldElement = kintone.app.record.getFieldElement(
+        item.storeField.code
+      );      
       
-      if (hasError) {
-      Swal10.fire({
-        icon: 'error',
-        title: 'Invalid Input',
-        text: 'Please correct the highlighted errors before proceeding.',
-        confirmButtonText: 'OK'
-      });
-      return;
-      }
-      
-      for (const item of CONFIG.searchContent) {
-      let setClass = item.searchName.replace(/\s+/g, "_");
-      let nextElement = elementsAll.find(`.label-${setClass}`).next();
-      if (nextElement.length) {
-        if (nextElement.hasClass('exact')) {
-        let value = nextElement.find('input').val();
-        let changFormat = await parseDate(value.trim());
-        console.log(changFormat)
-        searchInfoList.push({ fieldSearch: {code: item.fieldSearch.code, label: item.fieldSearch.label}, searchName: item.searchName, value: value, type: 'exact' });
-        if (changFormat) {
-          query += `(${item.fieldSearch.code} = "${changFormat}") and `;
-        }
-        } else if (nextElement.hasClass('date-range')) {
-        let startDate = nextElement.find('input').first().val();
-        let changFormatStart = await parseDate(startDate.trim());
-        let endDate = nextElement.find('input').last().val();
-        let changFormatEnd = await parseDate(endDate.trim());
-        searchInfoList.push({ fieldSearch: {code: item.fieldSearch.code, label: item.fieldSearch.label}, searchName: item.searchName, startDate: startDate, endDate: endDate, type: 'range' });
-        if (changFormatStart && changFormatEnd) {
-          query += `((${item.fieldSearch.code} >= "${changFormatStart}") and (${item.fieldSearch.code} <= "${changFormatEnd}")) and `;
-        } else if (changFormatStart) {
-          query += `(${item.fieldSearch.code} >= "${changFormatStart}") and `;
-        } else if (changFormatEnd) {
-          query += `(${item.fieldSearch.code} <= "${changFormatEnd}") and `;
-        }
-        }
-      }
-      }
-      query = query.replace(/ and $/, '');
-      await searchProcess(query, searchInfoList);
-    });
-
-    btnCancel.on('click', function() {
-      for (const item of CONFIG.searchContent) {
-        let setClass = item.searchName.replace(/\s+/g, "_");
-        let nextElement = elementsAll.find(`.label-${setClass}`).next();
-        if (nextElement.length) {
-          if (nextElement.hasClass('exact')) {
-            nextElement.find('input').val("");
-          } else if (nextElement.hasClass('date-range')) {
-            nextElement.find('input').first().val("");
-            nextElement.find('input').last().val("");
-          }
-        }
+      if (fieldElement && event.record[item.storeField.code]?.value) {
+        const formattedDate = formatDate(
+          event.record[item.storeField.code].value,
+          item.format
+        );
+        fieldElement.textContent = formattedDate;
       }
     });
-
-    let searchProcess = async function (query, searchInfoList) {
-      const bokTermsString = JSON.stringify(searchInfoList);
-      let queryEscape = encodeURIComponent(query);
-      const bokTerms = encodeURIComponent(bokTermsString);
-      const newUrl = new URL(window.location.href);
-      const baseUrl = `${newUrl.origin}${newUrl.pathname}`;
-      const currentUrlBase = baseUrl;
-      let url =
-        currentUrlBase +
-        `?view=${event.viewId}${queryEscape ? "&query=" + queryEscape : ""}&bokTerms=${bokTerms}`;
-      window.location.href = url;
-    };
-
-    function createDateInput(searchName, value) {
-      let dateInput = searchName.replace(/\s+/g, "_");
-      const datePicker = $("<div></div>")
-        .addClass("input-date-cybozu exact")
-        .append(
-          $("<input>")
-            .attr("type", "text")
-            .attr("id", `${dateInput}`)
-            .val(value)
-            .addClass("input-date-text-cybozu exact")
-        );
-      return datePicker;
-    }
-
-    function createDateRangeInput(searchName, startDate, endDate) {
-      let dateRange = searchName.replace(/\s+/g, "_");
-      const datePickerStart = $("<div></div>")
-        .addClass("input-date-cybozu")
-        .append(
-          $("<input>")
-            .attr("type", "text")
-            .attr("id", `${dateRange}_start`)
-            .addClass("input-date-text-cybozu range")
-            .val(startDate)
-        );
-      const datePickerEnd = $("<div></div>")
-        .addClass("input-date-cybozu")
-        .append(
-          $("<input>")
-            .attr("type", "text")
-            .attr("id", `${dateRange}_end`)
-            .addClass("input-date-text-cybozu range")
-            .val(endDate)
-        );
-      const separator = document.createElement("span");
-      separator.textContent = " ~ ";
-      const wrapper = document.createElement("div");
-      wrapper.style.display = "flex";
-      wrapper.classList.add("date-range");
-      wrapper.appendChild(datePickerStart[0]);
-      wrapper.appendChild(separator);
-      wrapper.appendChild(datePickerEnd[0]);
-      return wrapper;
-    }
     return event;
   });
-})(jQuery, Sweetalert2_10.noConflict(true), kintone.$PLUGIN_ID);
+
+  // Submit validation handler
+  kintone.events.on(
+    ["app.record.create.submit", "app.record.edit.submit"],
+    function (event) {
+      const popupAlerts = document.querySelectorAll(".popup-alert");
+      for (const alert of popupAlerts) {
+        if (alert.style.display === "block") {
+          event.error = "Invalid date format detected.";
+          return event;
+        }
+      }
+      return event;
+    }
+  );
+
+  // Config submit handler
+  // kintone.events.on("app.record.index.edit.submit", function (event) {
+  //   const config = [];
+  //   $("#kintoneplugin-setting-tspace tr").each(function () {
+  //     const $row = $(this);
+  //     if (!$row.is(":first-child")) {
+  //       const item = {
+  //         type: $row.find("#type").val(),
+  //         space: $row.find("#space").val(),
+  //         storeField: { code: $row.find("#store_field").val() },
+  //         format: $row.find("#format").val(),
+  //         initialValue: $row.find("#initial_value").val() || "0",
+  //       };
+  //       if (item.type && item.space && item.storeField.code && item.format) {
+  //         config.push(item);
+  //       }
+  //     }
+  //   });
+  //   return {
+  //     ...event,
+  //     config: JSON.stringify({ formatSetting: config }),
+  //   };
+  // });
+})(jQuery, Sweetalert2_10.noConflict(true), kintone.$PLUGIN_ID, kintone);
