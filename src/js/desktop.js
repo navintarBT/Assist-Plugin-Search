@@ -86,44 +86,32 @@ jQuery.noConflict();
       (a, b) => new Date(a[0]) - new Date(b[0])
     );
     let eraSymbol, customYear, month, day;
-    // Normalize the input: remove extra spaces and split into parts
-    // Check for "eYY.MM.DD" format
     if (/^[A-Za-z]\d{2}\.\d{2}\.\d{2}$/.test(eraInput)) {
       const match = /^([A-Za-z])(\d{2})\.(\d{2})\.(\d{2})$/.exec(eraInput);
       [, eraSymbol, customYear, month, day] = match;
     } else if (/^[A-Za-z]\d{2}\d{2}\d{2}$/.test(eraInput)) {
-      // Handle compact format: eYYMMDD
       const match = /^([A-Za-z])(\d{2})(\d{2})(\d{2})$/.exec(eraInput);
       [, eraSymbol, customYear, month, day] = match;
     } else if (/^[A-Za-z] \d{1,2} \d{1,2} \d{1,2}$/.test(eraInput)) {
-      // Handle spaced format: e YY MM DD or e Y MM D
       const parts = eraInput.split(" ");
       [eraSymbol, customYear, month, day] = parts;
     } else {
-      return false; // Explicitly return false for invalid formats
+      return false; 
     }
-    customYear = parseInt(customYear, 10); // Parse as integer
-    month = parseInt(month, 10); // Parse as integer
-    day = parseInt(day, 10); // Parse as integer
-
-    // Validate parsed parts
+    customYear = parseInt(customYear, 10); 
+    month = parseInt(month, 10);
+    day = parseInt(day, 10);
     if (isNaN(customYear) || isNaN(month) || isNaN(day)) {
       return false;
     }
-    // Find the corresponding era start date
     const eraData = JP_CALENDAR.find(
       (entry) => entry[2].toUpperCase() === eraSymbol.toUpperCase()
     );
     if (!eraData) {
       return false;
     }
-
-    const eraStartDate = new Date(eraData[0]); // Get the era's start date
-
-    // Determine the Gregorian year
+    const eraStartDate = new Date(eraData[0]); 
     let year = eraStartDate.getFullYear() + customYear - 1;
-
-    // Validate the month and day
     if (month < 1 || month > 12 || day < 1 || day > 31) {
       return false;
     }
@@ -139,11 +127,9 @@ jQuery.noConflict();
     try {
       const currentYear = new Date().getFullYear();
       let year, month, day;
-
-      // Helper function to pad single-digit numbers with leading zeros
       const pad = (num) => String(num).padStart(2, "0");
       const isValidDate = (y, m, d) => {
-        const date = new Date(y, m - 1, d); // Months are 0-indexed in JS
+        const date = new Date(y, m - 1, d); 
         return (
           date.getFullYear() === y &&
           date.getMonth() + 1 === m &&
@@ -151,7 +137,6 @@ jQuery.noConflict();
         );
       };
 
-      // Handle different formats
       if (/^\d{8}$/.test(input)) {
         // YYYYMMDD
         year = parseInt(input.slice(0, 4), 10);
@@ -159,7 +144,7 @@ jQuery.noConflict();
         day = parseInt(input.slice(6, 8), 10);
       } else if (/^\d{6}$/.test(input)) {
         // YYMMDD
-        year = parseInt(input.slice(0, 2), 10) + 2000; // Assuming 21st century
+        year = parseInt(input.slice(0, 2), 10) + 2000; 
         month = parseInt(input.slice(2, 4), 10);
         day = parseInt(input.slice(4, 6), 10);
       } else if (/^\d{4}$/.test(input)) {
@@ -182,7 +167,7 @@ jQuery.noConflict();
       } else if (/^\d{2} \d{1,2} \d{1,2}$/.test(input)) {
         // YY M D
         const [y, m, d] = input.split(" ");
-        year = parseInt(y, 10) + 2000; // Assuming 21st century
+        year = parseInt(y, 10) + 2000;
         month = parseInt(m, 10);
         day = parseInt(d, 10);
       } else if (/^\d{1,2} \d{1,2}$/.test(input)) {
@@ -223,7 +208,6 @@ jQuery.noConflict();
       if (!isValidDate(year, month, day)) {
         return false; // Invalid date
       }
-
       return `${year}-${pad(month)}-${pad(day)}`;
     } catch (error) {
       return false;
@@ -541,105 +525,103 @@ jQuery.noConflict();
                 });
             });
 
-          elementsLabelDate.append(labelEl);
-          let dateInput;
-          if (status === "initial") {
-            let value = "";
-            dateInput = $(createDateInput(item.searchName, value));
-            currentInputType = "exact";
-          } else {
-            if (item.type == "exact") {
-              dateInput = $(createDateInput(item.searchName, item.value));
-              currentInputType = "exact";
-            } else {
-              dateInput = $(
-                createDateRangeInput(
-                  item.searchName,
-                  item.startDate,
-                  item.endDate
-                )
-              );
-              currentInputType = "range";
-            }
+        elementsLabelDate.append(labelEl);
+        let dateInput
+        if (status === "initial") {
+          let value = "";
+          dateInput = $(createDateInput(item.searchName, value));
+          currentInputType = 'exact'
+        }else{
+          if(item.type == "exact") {
+            dateInput = $(createDateInput(item.searchName, item.value));
+            currentInputType = 'exact'
+          }else{
+            dateInput = $(createDateRangeInput(item.searchName, item.startDate, item.endDate));
+            currentInputType = 'range'
           }
-          dateInput.find("input").on("change", async function (e) {
-            let changeFormat = await parseDate(e.target.value.trim());
-            if (changeFormat === false) {
-              inputError.show();
-            } else {
-              inputError.hide();
-            }
-          });
-          elementsLabelDate.append(dateInput, inputError);
-          elements.append(elementsLabelDate);
         }
-        elementsAll.append(elements);
-      });
-      elementsAll.append(btnSearch, btnCancel);
-      $(spaceEl).append(elementsAll);
-    }
+        dateInput.find('input').on('change', async function (e) {
+          let changeFormat = await parseDate(e.target.value.trim());
+          console.log(changeFormat)
+
+          
+          if (changeFormat === false) {
+            inputError.show();
+          } else {
+            inputError.hide();
+          }
+        });
+        elementsLabelDate.append(dateInput, inputError);
+        elements.append(elementsLabelDate);
+      }
+      elementsAll.append(elements);
+    });
+    elementsAll.append(btnSearch, btnCancel);
+    $(spaceEl).append(elementsAll);
+  }
 
     btnSearch.on("click", async function () {
       let searchInfoList = [];
-      let query = "";
-      let hasError =
-        elementsAll.find(".input-error.search").filter(function () {
-          return $(this).css("display") !== "none";
-        }).length > 0;
-
+      let query = ''; 
+      let hasError = elementsAll.find('.input-error.search').filter(function() {
+      return $(this).css('display') !== 'none';
+      }).length > 0;
+      
       if (hasError) {
-        Swal10.fire({
-          icon: "error",
-          title: "Invalid Input",
-          text: "Please correct the highlighted errors before proceeding.",
-          confirmButtonText: "OK",
-        });
-        return;
+      Swal10.fire({
+        icon: 'error',
+        title: 'Invalid Input',
+        text: 'Please correct the highlighted errors before proceeding.',
+        confirmButtonText: 'OK'
+      });
+      return;
       }
+      
+      for (const item of CONFIG.searchContent) {
+      let setClass = item.searchName.replace(/\s+/g, "_");
+      let nextElement = elementsAll.find(`.label-${setClass}`).next();
+      if (nextElement.length) {
+        if (nextElement.hasClass('exact')) {
+        let value = nextElement.find('input').val();
+        let changFormat = await parseDate(value.trim());
+        console.log(changFormat)
+        searchInfoList.push({ fieldSearch: {code: item.fieldSearch.code, label: item.fieldSearch.label}, searchName: item.searchName, value: value, type: 'exact' });
+        if (changFormat) {
+          query += `(${item.fieldSearch.code} = "${changFormat}") and `;
+        }
+        } else if (nextElement.hasClass('date-range')) {
+        let startDate = nextElement.find('input').first().val();
+        let changFormatStart = await parseDate(startDate.trim());
+        let endDate = nextElement.find('input').last().val();
+        let changFormatEnd = await parseDate(endDate.trim());
+        searchInfoList.push({ fieldSearch: {code: item.fieldSearch.code, label: item.fieldSearch.label}, searchName: item.searchName, startDate: startDate, endDate: endDate, type: 'range' });
+        if (changFormatStart && changFormatEnd) {
+          query += `((${item.fieldSearch.code} >= "${changFormatStart}") and (${item.fieldSearch.code} <= "${changFormatEnd}")) and `;
+        } else if (changFormatStart) {
+          query += `(${item.fieldSearch.code} >= "${changFormatStart}") and `;
+        } else if (changFormatEnd) {
+          query += `(${item.fieldSearch.code} <= "${changFormatEnd}") and `;
+        }
+        }
+      }
+      }
+      query = query.replace(/ and $/, '');
+      await searchProcess(query, searchInfoList);
+    });
 
-      CONFIG.searchContent.forEach((item) => {
+    btnCancel.on('click', function() {
+      for (const item of CONFIG.searchContent) {
         let setClass = item.searchName.replace(/\s+/g, "_");
         let nextElement = elementsAll.find(`.label-${setClass}`).next();
         if (nextElement.length) {
-          if (nextElement.hasClass("exact")) {
-            let value = nextElement.find("input").val();
-            searchInfoList.push({
-              fieldSearch: {
-                code: item.fieldSearch.code,
-                label: item.fieldSearch.label,
-              },
-              searchName: item.searchName,
-              value: value,
-              type: "exact",
-            });
-            if (value) {
-              query += `(${item.fieldSearch.code} = "${value}") and `;
-            }
-          } else if (nextElement.hasClass("date-range")) {
-            let startDate = nextElement.find("input").first().val();
-            let endDate = nextElement.find("input").last().val();
-            searchInfoList.push({
-              fieldSearch: {
-                code: item.fieldSearch.code,
-                label: item.fieldSearch.label,
-              },
-              searchName: item.searchName,
-              startDate: startDate,
-              endDate: endDate,
-              type: "range",
-            });
-            if (startDate && endDate) {
-              query += `((${item.fieldSearch.code} >= "${startDate}") and (${item.fieldSearch.code} <= "${endDate}")) and `;
-            } else if (startDate) {
-              query += `(${item.fieldSearch.code} >= "${startDate}") and `;
-            } else if (endDate) {
-              query += `(${item.fieldSearch.code} <= "${endDate}") and `;
-            }
+          if (nextElement.hasClass('exact')) {
+            nextElement.find('input').val("");
+          } else if (nextElement.hasClass('date-range')) {
+            nextElement.find('input').first().val("");
+            nextElement.find('input').last().val("");
           }
         }
-      });
-      query = query.replace(/ and $/, "");
-      await searchProcess(query, searchInfoList);
+      }
     });
 
     let searchProcess = async function (query, searchInfoList) {

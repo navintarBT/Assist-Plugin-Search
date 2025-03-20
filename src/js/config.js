@@ -102,40 +102,17 @@ jQuery.noConflict();
 			let rowForClone = $("#kintoneplugin-setting-tspace tr:first-child").clone(true).removeAttr("hidden");
 			$("#kintoneplugin-setting-tspace tr:last-child").after(rowForClone);
 			rowForClone.find("#initial_value").val(item.initialValue);
-
-			if ($(rowForClone).find('select#type option[value="' + item.type + '"]').length == 0) {
-				rowForClone.find("#type").val("-----");
-			} else {
 				rowForClone.find("#type").val(item.type);
-			}
-			if ($(rowForClone).find('select#space option[value="' + item.space + '"]').length == 0) {
-				rowForClone.find("#space").val("-----");
-			} else {
 				rowForClone.find("#space").val(item.space);
-			}
-
-			if ($(rowForClone).find('select#store_field option[value="' + item.storeField.code + '"]').length == 0) {
-				rowForClone.find("#store_field").val("-----");
-			} else {
 				rowForClone.find("#store_field").val(item.storeField.code);
-			}
-
-			if ($(rowForClone).find('select#format option[value="' + item.format + '"]').length == 0) {
-				rowForClone.find("#format").val("-----");
-			} else {
 				rowForClone.find("#format").val(item.format);
-			}
 		})
 		//change
 		getConfig.searchContent.forEach((item) => {
 			let rowSearchContent = $("#kintoneplugin-setting-search tr:first-child").clone(true).removeAttr("hidden");
 			$("#kintoneplugin-setting-search tr:last-child").after(rowSearchContent);
-			rowSearchContent.find("#search_name").val(item.searchName);
-			if ($(rowSearchContent).find('select#field_search option[value="' + item.fieldSearch.code + '"]').length == 0) {
-				rowSearchContent.find("#field_search").val("-----");
-			} else {
+				rowSearchContent.find("#search_name").val(item.searchName);
 				rowSearchContent.find("#field_search").val(item.fieldSearch.code);
-			}
 		})
 	}
 
@@ -183,103 +160,82 @@ jQuery.noConflict();
 
 	// validate update function.
 	async function validation() {
-		let formatSettingTable = $('#kintoneplugin-setting-tspace > tr:gt(0)').toArray();
-		let searchContentTable = $('#kintoneplugin-setting-search > tr:gt(0)').toArray();
 		let hasError = false;
 		let errorMessage = "";
 		let errorSearchContent = "";
 		let storeFiledArray = [];
 		let fieldSearchArray = [];
 		let spaceArray = [];
-		let typeError = "";
-		let storeFieldError = "";
-		let spaceError = "";
-		let searchNameError = "";
-		let fieldSearchError = "";
-		for (const [index, element] of formatSettingTable.entries()) {
-			let type = $(element).find('#type');
-			let space = $(element).find('#space');
-			let storeField = $(element).find('#store_field');
+
+		$('#kintoneplugin-setting-tspace > tr:gt(0)').each(function () {
+			let type = $(this).find('#type');
+			let space = $(this).find('#space');
+			let storeField = $(this).find('#store_field');
+
 			if (type.val() == "-----") {
-				typeError = `<p>Please select a type.</p>`;
+				errorMessage += `<p>Please select a type.</p>`;
 				$(type).parent().addClass('validation-error');
 				hasError = true;
 			} else {
 				$(type).parent().removeClass('validation-error');
 			}
 
-			if (space.val()) {
-				if (!spaceArray.includes(space.val().trim())) {
-					$(space).parent().removeClass('validation-error');
-					spaceArray.push(space.val());
-				} else {
-					$(space).parent().addClass('validation-error');
-					spaceError = `<p>Cannot select the same space</p>`;
-					hasError = true;
-				}
+			if (space.val() && spaceArray.includes(space.val().trim())) {
+				errorMessage += `<p>Cannot select the same space</p>`;
+				$(space).parent().addClass('validation-error');
+				hasError = true;
+			} else {
+				$(space).parent().removeClass('validation-error');
+				spaceArray.push(space.val());
 			}
 
 			if (storeField.val() == "-----") {
-				storeFieldError = `<p>Select the storage field.</p>`;
+				errorMessage += `<p>Select the storage field.</p>`;
+				$(storeField).parent().addClass('validation-error');
+				hasError = true;
+			} else if (storeFiledArray.includes(storeField.val().trim())) {
+				errorMessage += `<p>The field to be searched ${storeField.val()} already exists.</p>`;
 				$(storeField).parent().addClass('validation-error');
 				hasError = true;
 			} else {
 				$(storeField).parent().removeClass('validation-error');
-				if (!storeFiledArray.includes(storeField.val().trim())) {
-					$(storeField).parent().removeClass('validation-error');
-					storeFiledArray.push(storeField.val());
-				} else {
-					$(storeField).parent().addClass('validation-error');
-					errorMessage += `<p>The field to be searched${storeField.val()}already exists.</p>`;
-					hasError = true;
-				}
+				storeFiledArray.push(storeField.val());
 			}
+		});
 
-		}
+		$('#kintoneplugin-setting-search > tr:gt(0)').each(function () {
+			let searchName = $(this).find('#search_name');
+			let fieldSearch = $(this).find('#field_search');
 
-		for (const [index, element] of searchContentTable.entries()) {
-			let searchName = $(element).find('#search_name');
-			let fieldSearch = $(element).find('#field_search');
 			if (searchName.val() == "") {
-				searchNameError = `<p>Search name cannot be empty</p>`;
+				errorSearchContent += `<p>Search name cannot be empty</p>`;
+				$(searchName).addClass('validation-error');
+				hasError = true;
+			} else if (fieldSearchArray.includes(searchName.val().trim())) {
+				errorSearchContent += `<p>The search name ${searchName.val()} already exists.</p>`;
 				$(searchName).addClass('validation-error');
 				hasError = true;
 			} else {
 				$(searchName).removeClass('validation-error');
-				if (!fieldSearchArray.includes(searchName.val().trim())) {
-					$(searchName).removeClass('validation-error');
-					fieldSearchArray.push(searchName.val());
-				} else {
-					$(searchName).addClass('validation-error');
-					errorSearchContent += `<p>The search name ${searchName.val()} already exists.</p>`;
-					hasError = true;
-				}
+				fieldSearchArray.push(searchName.val());
 			}
 
 			if (fieldSearch.val() == "-----") {
-				fieldSearchError = `<p>Please select a type field for search</p>`;
+				errorSearchContent += `<p>Please select a type field for search</p>`;
+				$(fieldSearch).parent().addClass('validation-error');
+				hasError = true;
+			} else if (fieldSearchArray.includes(fieldSearch.val().trim())) {
+				errorSearchContent += `<p>The field for search ${fieldSearch.val()} already exists.</p>`;
 				$(fieldSearch).parent().addClass('validation-error');
 				hasError = true;
 			} else {
 				$(fieldSearch).parent().removeClass('validation-error');
-				if (!fieldSearchArray.includes(fieldSearch.val().trim())) {
-					$(fieldSearch).parent().removeClass('validation-error');
-					fieldSearchArray.push(fieldSearch.val());
-				} else {
-					$(fieldSearch).parent().addClass('validation-error');
-					errorSearchContent += `<p>The field for search ${fieldSearch.val()} already exists.</p>`;
-					hasError = true;
-				}
+				fieldSearchArray.push(fieldSearch.val());
 			}
-		}
-// change
-		if (typeError) errorMessage += typeError;
-		if (spaceError) errorMessage += spaceError;
-		if (storeFieldError) errorMessage += storeFieldError;
-		if (searchNameError) errorSearchContent += searchNameError;
-		if (fieldSearchError) errorSearchContent += fieldSearchError;
-		if (errorMessage.length > 0) errorMessage = "<p>【Date format settings】</p>" + errorMessage;
-		if (errorSearchContent.length > 0) errorSearchContent = "<p>【Search Content】</p>" + errorSearchContent;
+		});
+
+		if (errorMessage) errorMessage = "<p>【Date format settings】</p>" + errorMessage;
+		if (errorSearchContent) errorSearchContent = "<p>【Search Content】</p>" + errorSearchContent;
 		if (hasError) Swal10.fire({
 			position: 'center',
 			icon: 'error',
@@ -313,7 +269,7 @@ jQuery.noConflict();
 		//japan
 		$('input#search_name').on('input', function () {
 			let currentValue = $(this).val();
-			currentValue = currentValue.replace(/[^a-zA-Z0-9\s]/g, '');
+			currentValue = currentValue.replace(/[^\u3000-\u303F\u3040-\u309F\u30A0-\u30FF\uFF00-\uFFEFa-zA-Z0-9\s]/g, '');
 			currentValue = currentValue.replace(/\s{2,}/g, ' ');
 			$(this).val(currentValue);
 		});
